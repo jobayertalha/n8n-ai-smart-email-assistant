@@ -1,0 +1,534 @@
+{
+  "name": "Smart Email Assistant",
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst output = [];\n\nconst HIGH_PRIORITY_KEYWORDS = [\n  'interview', 'job offer', 'offer letter',\n  'interview invitation', 'application deadline',\n  'hiring', 'recruiter', 'job application',\n  'job opportunity', 'job opening',\n  'employment offer', 'appointment letter',\n  'meeting invitation', 'project deadline',\n  'urgent task', 'client request',\n  'salary negotiation', 'contract agreement'\n];\n\nconst MEDIUM_PRIORITY_KEYWORDS = [\n  'course', 'udemy', 'coursera', 'edx',\n  'tutorial', 'training', 'certification',\n  'certificate', 'webinar', 'workshop',\n  'seminar', 'programming', 'newsletter',\n  'machine learning', 'data science',\n  'python', 'javascript', 'react',\n  'career development', 'skill development',\n  'technical article', 'research paper'\n];\n\nconst LOW_PRIORITY_KEYWORDS = [\n  'sale', 'discount', 'shopping',\n  'amazon', 'daraz', 'order confirmation',\n  'shipping update', 'delivery update',\n  'unsubscribe', 'promotion',\n  'limited time', 'buy now'\n];\n\nconst SECURITY_KEYWORDS = [\n  'security alert',\n  'suspicious activity',\n  'unauthorized access',\n  'new sign-in',\n  'new signin',\n  'password changed',\n  'password reset',\n  'account compromised',\n  'verify your account',\n  'two-step verification',\n  'two factor authentication',\n  '2-step verification',\n  'unusual activity',\n  'security notification'\n];\n\nconst PROMOTION_SENDER_KEYWORDS = [\n  'newsletter',\n  'marketing',\n  'promotions',\n  'no-reply',\n  'noreply'\n];\n\nfor (const item of items) {\n  const email = { ...item.json };\n\n  // Normalize available email fields.\n  const subject = String(email.subject || '').toLowerCase();\n  const sender = String(\n    email.senderEmail || email.from || ''\n  ).toLowerCase();\n\n  const content = [\n    email.subject,\n    email.snippet,\n    email.bodyText,\n    email.fullContent\n  ]\n    .filter(Boolean)\n    .join(' ')\n    .toLowerCase();\n\n  let category = 2;\n  let priorityScore = 3;\n  let reason = 'General or unclassified email';\n  let needsReply = false;\n\n  // 1. Security alerts take precedence over ordinary keywords.\n  const securityKeyword = SECURITY_KEYWORDS.find(\n    keyword =>\n      subject.includes(keyword) ||\n      content.includes(keyword)\n  );\n\n  if (securityKeyword) {\n    category = 0;\n    priorityScore = 10;\n    reason = `Security alert detected: \"${securityKeyword}\"`;\n    needsReply = false;\n\n  } else {\n    // 2. Match meaningful high-priority job/work phrases.\n    const highKeyword = HIGH_PRIORITY_KEYWORDS.find(\n      keyword => content.includes(keyword)\n    );\n\n    if (highKeyword) {\n      category = 0;\n      priorityScore = 9;\n      reason = `High priority: \"${highKeyword}\" detected`;\n      needsReply = true;\n\n    } else {\n      // 3. Match learning and career-development content.\n      const mediumKeyword = MEDIUM_PRIORITY_KEYWORDS.find(\n        keyword => content.includes(keyword)\n      );\n\n      if (mediumKeyword) {\n        category = 1;\n        priorityScore = 6;\n        reason = `Medium priority: \"${mediumKeyword}\" detected`;\n\n      } else {\n        // 4. Match promotional and shopping content.\n        const lowKeyword = LOW_PRIORITY_KEYWORDS.find(\n          keyword => content.includes(keyword)\n        );\n\n        if (lowKeyword) {\n          category = 2;\n          priorityScore = 3;\n          reason = `Low priority: \"${lowKeyword}\" detected`;\n\n        } else {\n          // 5. Handle obvious promotional/newsletter senders.\n          const isPromotionalSender =\n            PROMOTION_SENDER_KEYWORDS.some(\n              keyword => sender.includes(keyword)\n            );\n\n          if (isPromotionalSender) {\n            category = 2;\n            priorityScore = 2;\n            reason = 'Likely automated or promotional email';\n          }\n        }\n      }\n    }\n  }\n\n  // Assign the custom Gmail label created for each category.\n  let priorityLabel;\n\n  if (category === 0) {\n    priorityLabel = 'AI-High-Priority';\n  } else if (category === 1) {\n    priorityLabel = 'AI-Medium-Priority';\n  } else {\n    priorityLabel = 'AI-Low-Priority';\n  }\n\n  // Preserve the fields required by the existing workflow.\n  email.category = category;\n  email.priorityScore = priorityScore;\n  email.priorityLabel = priorityLabel;\n  email.reason = reason;\n  email.needsReply = needsReply;\n  email.labelIdsToApply = [priorityLabel];\n\n  output.push({ json: email });\n}\n\nreturn output;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        432,
+        448
+      ],
+      "id": "856ff03d-7e7c-4a54-a78e-403a81a142ae",
+      "name": "Classify Email Priority"
+    },
+    {
+      "parameters": {
+        "mode": "expression",
+        "numberOutputs": 3,
+        "output": "={{ Number($json.category ?? 2) }}"
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        656,
+        144
+      ],
+      "id": "6717552a-7425-40eb-9da2-76b19e4646fd",
+      "name": "Route by Priority"
+    },
+    {
+      "parameters": {
+        "operation": "addLabels",
+        "messageId": "={{ $json.messageId }}",
+        "labelIds": [
+          "Label_599298923709385436"
+        ]
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        880,
+        0
+      ],
+      "id": "87e56fb1-50d5-4dcc-8544-0645c42ca471",
+      "name": "Label High Priority",
+      "webhookId": "3b6875a7-32df-4ec6-9c33-a90b77fa455b",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "iEoLMDhlk6n3n012",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "addLabels",
+        "messageId": "={{ $json.messageId }}",
+        "labelIds": [
+          "Label_5857819435914377605"
+        ]
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        880,
+        160
+      ],
+      "id": "25cbb78c-7e78-4369-a386-d7eb95a30718",
+      "name": "Label Medium Priority",
+      "webhookId": "3b6875a7-32df-4ec6-9c33-a90b77fa455b",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "iEoLMDhlk6n3n012",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "addLabels",
+        "messageId": "={{ $json.messageId }}",
+        "labelIds": [
+          "Label_5728938235421217079"
+        ]
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        880,
+        320
+      ],
+      "id": "c6a69498-c8dd-4080-968a-2faf94be647a",
+      "name": "Label Low Priority",
+      "webhookId": "3b6875a7-32df-4ec6-9c33-a90b77fa455b",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "iEoLMDhlk6n3n012",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst replies = [];\n\nfor (const item of items) {\n  const rawText =\n    item.json.output?.[0]?.content?.[0]?.text ||\n    item.json.text ||\n    item.json.response ||\n    item.json.output ||\n    '';\n\n  const cleanText = String(rawText).trim();\n\n  let parsed = {};\n\n  try {\n    // Remove Markdown code fences if the model returns them.\n    const normalizedText = cleanText\n      .replace(/^```(?:json)?\\s*/i, '')\n      .replace(/\\s*```$/, '')\n      .trim();\n\n    parsed = JSON.parse(normalizedText);\n  } catch (e) {\n    // Preserve a plain-text reply if the output is not JSON.\n    parsed = {\n      subject: '(No Subject)',\n      body: cleanText,\n      senderEmail: item.json.senderEmail || ''\n    };\n  }\n\n  const reply = {\n    subject: parsed.subject || '(No Subject)',\n    body: parsed.body || cleanText,\n    senderEmail: parsed.senderEmail || item.json.senderEmail || ''\n  };\n\n  replies.push({ json: reply });\n}\n\nreturn replies;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1424,
+        0
+      ],
+      "id": "6541e2fe-1127-47fa-b288-361a9916cd65",
+      "name": "Parse High Priority Response"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst replies = [];\n\nfor (const item of items) {\n  const rawText = item.json.output?.[0]?.content?.[0]?.text || '{}';\n  let parsed = {};\n  try {\n    parsed = JSON.parse(rawText.trim());\n  } catch (e) {\n    parsed = { subject: 'No Subject', body: 'No Body Text', senderEmail: 'unknown@example.com' };\n  }\n\n  replies.push({\n    json: {\n      subject: parsed.subject || 'No Subject',\n      bodyText: parsed.body || 'No Body Text',\n      senderEmail: parsed.senderEmail || 'unknown@example.com'\n    }\n  });\n}\n\nreturn replies;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1424,
+        160
+      ],
+      "id": "027ccf0f-1608-46ad-a06c-0aec4b49f0a7",
+      "name": "Parse Medium Priority Response"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst output = [];\n\nfor (const item of items) {\n  const rawText = item.json.output?.[0]?.content?.[0]?.text || '{}';\n  let parsed = {};\n  try {\n    parsed = JSON.parse(rawText);\n  } catch (e) {\n    parsed = { suggestion: 'Review manually' };\n  }\n  output.push({ \n    json: { \n      suggestion: parsed.suggestion || 'Review manually', \n      senderEmail: parsed.senderEmail || item.json.senderEmail || 'unknown@example.com'\n    } \n  });\n}\n\nreturn output;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1424,
+        320
+      ],
+      "id": "866d5941-b08c-4476-b118-4da92ed94425",
+      "name": "Parse Low Priority Response"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.senderEmail }}",
+        "subject": "={{ $json.subject }}",
+        "emailType": "text",
+        "message": "={{ $json.body }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        2112,
+        80
+      ],
+      "id": "51fe34ad-c91b-48a2-8a08-c98d2c9a5bab",
+      "name": "Send Auto-Reply",
+      "webhookId": "4e370ac5-275d-4a41-84d9-ce035ed17e53",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "iEoLMDhlk6n3n012",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "draft",
+        "subject": "={{ $json.subject }}",
+        "message": "={{ $json.bodyText }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        2112,
+        320
+      ],
+      "id": "ab60c5fc-dde8-4a5e-a453-7a4842452c06",
+      "name": "Create Draft",
+      "webhookId": "0f0d711f-31aa-4fc9-9bba-0444ddc860e1",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "iEoLMDhlk6n3n012",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "simple": false,
+        "filters": {
+          "labelIds": [
+            "INBOX"
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        160
+      ],
+      "id": "28aff27d-2d45-4ed4-ad95-2cf0b1bac108",
+      "name": "Gmail Trigger1",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "iEoLMDhlk6n3n012",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst emails = [];\n\nfor (const item of items) {\n  // Extract From, To, Subject\n  let rawFrom = '';\n  if (item.json.from && item.json.from.value) {\n    const sender = item.json.from.value[0];\n    rawFrom = sender.name ? `${sender.name} <${sender.address}>` : sender.address;\n  }\n\n  let rawTo = '';\n  if (item.json.to && item.json.to.value) {\n    rawTo = item.json.to.value.map(v => v.address).join(', ');\n  }\n\n  const rawSubject = item.json.subject || '(No Subject)';\n\n  // Sender name and email\n  let senderName = '';\n  let senderEmail = '';\n  if (rawFrom.includes('<') && rawFrom.includes('>')) {\n    const match = rawFrom.match(/<(.+?)>/);\n    senderEmail = match ? match[1] : rawFrom;\n    senderName = rawFrom.split('<')[0].trim();\n  } else if (rawFrom.includes('@')) {\n    senderEmail = rawFrom.trim();\n    senderName = rawFrom.split('@')[0];\n  } else {\n    senderEmail = 'unknown@email.com';\n    senderName = 'Unknown Sender';\n  }\n\n  // Body text\n  const bodyText = item.json.text || '';\n  const snippet = bodyText.substring(0, 200);\n\n  const email = {\n    messageId: item.json.id || '',\n    threadId: item.json.threadId || item.json.id || '',\n    from: rawFrom,\n    senderEmail,\n    senderName,\n    to: rawTo,\n    subject: rawSubject,\n    bodyText,\n    snippet,\n    date: item.json.date || new Date().toISOString(),\n    labels: item.json.labels || [],\n    fullContent: `${rawSubject} ${bodyText}`.toLowerCase()\n  };\n\n  emails.push({ json: email });\n}\n\nreturn emails;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        160
+      ],
+      "id": "ce20285d-6596-4dab-a770-f82858b68a40",
+      "name": "Extract Email Information1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst output = [];\n\nfor (const item of items) {\n  output.push({\n    json: {\n      senderEmail: item.json.senderEmail || 'unknown@example.com'\n    }\n  });\n}\n\nreturn output;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1616,
+        624
+      ],
+      "id": "7ecbb631-b8d1-48b0-903b-7edd98523361",
+      "name": "Code in JavaScript3"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1856,
+        80
+      ],
+      "id": "8cb0e6bf-d87f-4505-aa37-83d7126fc1b3",
+      "name": "Merge2"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1872,
+        320
+      ],
+      "id": "e14dd27e-635c-475f-a8b1-c07daccb788e",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "model": "qwen/qwen3.8-27b",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        1184,
+        176
+      ],
+      "id": "6ac87d65-477f-4e38-b3ac-95b544a17180",
+      "name": "Groq Chat Model",
+      "credentials": {
+        "groqApi": {
+          "id": "8rWoZFSgljHZqC0r",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        1184,
+        16
+      ],
+      "id": "90f23603-2c85-4c37-933d-fbcec7151cf3",
+      "name": "Groq Chat Model1",
+      "credentials": {
+        "groqApi": {
+          "id": "8rWoZFSgljHZqC0r",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        1184,
+        336
+      ],
+      "id": "e96b2563-c6e5-4dfa-a961-a9b94605698c",
+      "name": "Groq Chat Model2",
+      "credentials": {
+        "groqApi": {
+          "id": "8rWoZFSgljHZqC0r",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        1648,
+        896
+      ],
+      "id": "64993249-8551-41aa-b9fa-a764c2d7f17f",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": null,
+          "name": "",
+          "__aiGatewayManaged": true
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Classify Email Priority": {
+      "main": [
+        [
+          {
+            "node": "Route by Priority",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Code in JavaScript3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Priority": {
+      "main": [
+        [
+          {
+            "node": "Label High Priority",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Label Medium Priority",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Label Low Priority",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Label High Priority": {
+      "main": [
+        [
+          {
+            "node": "Parse High Priority Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Label Medium Priority": {
+      "main": [
+        [
+          {
+            "node": "Parse Medium Priority Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Label Low Priority": {
+      "main": [
+        [
+          {
+            "node": "Parse Low Priority Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse High Priority Response": {
+      "main": [
+        [
+          {
+            "node": "Merge2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Medium Priority Response": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail Trigger1": {
+      "main": [
+        [
+          {
+            "node": "Extract Email Information1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Email Information1": {
+      "main": [
+        [
+          {
+            "node": "Classify Email Priority",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript3": {
+      "main": [
+        [
+          {
+            "node": "Merge2",
+            "type": "main",
+            "index": 1
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge2": {
+      "main": [
+        [
+          {
+            "node": "Send Auto-Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Create Draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "5dad1ddb-a2dd-42ba-bac2-bc4103dc9637",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "4208360b942ff7296894cd6907b468e10855f4f49dad6a47fab867f248f4f8bc"
+  },
+  "nodeGroups": [],
+  "id": "NQRDYpo9lxbgVCKi",
+  "tags": []
+}
