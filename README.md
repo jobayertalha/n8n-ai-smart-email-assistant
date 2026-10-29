@@ -230,35 +230,8 @@ The low-priority branch is intended to:
 - Apply the low-priority Gmail label.
 - Generate a suggested response or recommended action where configured.
 
-### Screenshots
 
-Add screenshots of your own workflow and successful executions here.
 
-**Full Workflow**
-
-```text
-[Insert your n8n workflow screenshot here]
-```
-
-**High-Priority Branch**
-
-```text
-[Insert a screenshot showing a successful high-priority execution]
-```
-
-**Medium-Priority Branch**
-
-```text
-[Insert a screenshot showing a successful medium-priority execution]
-```
-
-**Low-Priority Branch**
-
-```text
-[Insert a screenshot showing a successful low-priority execution]
-```
-
----
 
 ## Getting Started
 
